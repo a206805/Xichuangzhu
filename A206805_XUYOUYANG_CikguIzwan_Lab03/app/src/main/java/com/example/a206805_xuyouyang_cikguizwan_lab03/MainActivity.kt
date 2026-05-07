@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,12 +35,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-// 请确保下面的主题包名与你本地项目完全一致
 import com.example.a206805_xuyouyang_cikguizwan_lab03.ui.theme.A206805_XUYOUYANG_CikguIzwan_Lab03Theme
 
-// ==========================================
-// 1. 数据类 (Data Class)
-// ==========================================
+
 data class CustomQuote(
     val author: String,
     val content: String,
@@ -50,9 +49,7 @@ data class AppState(
     val userQuotes: List<CustomQuote> = emptyList()
 )
 
-// ==========================================
-// 2. 视图模型 (ViewModel) - 管理全局共享状态
-// ==========================================
+
 class LiteratureViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(AppState())
     val uiState: StateFlow<AppState> = _uiState.asStateFlow()
@@ -67,11 +64,18 @@ class LiteratureViewModel : ViewModel() {
             currentState.copy(userQuotes = currentState.userQuotes + newQuote)
         }
     }
+
+    // 【新增】仅仅增加删除函数
+    fun deleteQuote(quoteToDelete: CustomQuote) {
+        _uiState.update { currentState ->
+            currentState.copy(
+                userQuotes = currentState.userQuotes.filter { it != quoteToDelete }
+            )
+        }
+    }
 }
 
-// ==========================================
-// 3. 主活动 (Main Activity)
-// ==========================================
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,7 +86,7 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
 
                 Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                    // 确保你的 res/drawable 文件夹里有 bg_classical 这张图片
+
                     Image(
                         painter = painterResource(id = R.drawable.bg_classical),
                         contentDescription = "Classical Background",
@@ -94,34 +98,27 @@ class MainActivity : ComponentActivity() {
                         TopBar()
                         Box(modifier = Modifier.height(24.dp))
 
-                        // ==========================================
-                        // 4. 导航宿主 (NavHost) - 包含 5 个页面
-                        // ==========================================
+
                         Box(modifier = Modifier.weight(1f)) {
-                            // 【已修改】首屏设定为 "library_screen"
+
                             NavHost(navController = navController, startDestination = "library_screen") {
 
-                                // 页面1：首屏搜索 (Home/Search)
                                 composable("search_screen") {
                                     SearchScreen(viewModel) { navController.navigate("library_screen") }
                                 }
 
-                                // 页面2：书库页 (Library) - 现在的默认启动页
                                 composable("library_screen") {
                                     LibraryScreen(viewModel) { navController.navigate("detail_screen") }
                                 }
 
-                                // 页面3：详情页 (Detail)
                                 composable("detail_screen") {
                                     DetailScreen(viewModel) { navController.popBackStack() }
                                 }
 
-                                // 页面4：表单添加页 (Add Item)
                                 composable("add_screen") {
                                     AddQuoteScreen(viewModel, navController)
                                 }
 
-                                // 页面5：收藏列表页 (Summary List)
                                 composable("collection_screen") {
                                     CollectionScreen(viewModel)
                                 }
@@ -137,9 +134,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// ==========================================
-// 5. 导航栏组件
-// ==========================================
+
 @Composable
 fun TopBar() {
     Row(
@@ -183,11 +178,9 @@ fun BottomNavBar(navController: NavController) {
     }
 }
 
-// ==========================================
-// 6. 核心页面定义 (共 5 个)
-// ==========================================
 
-// --- 页面 1: 搜索屏幕 ---
+
+
 @Composable
 fun SearchScreen(viewModel: LiteratureViewModel, onSearchClicked: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
@@ -221,7 +214,7 @@ fun SearchScreen(viewModel: LiteratureViewModel, onSearchClicked: () -> Unit) {
     }
 }
 
-// --- 页面 2: 书库屏幕 ---
+
 @Composable
 fun LibraryScreen(viewModel: LiteratureViewModel, onCardClicked: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
@@ -244,7 +237,7 @@ fun LibraryScreen(viewModel: LiteratureViewModel, onCardClicked: () -> Unit) {
     }
 }
 
-// --- 页面 3: 详情屏幕 ---
+
 @Composable
 fun DetailScreen(viewModel: LiteratureViewModel, onBackClicked: () -> Unit) {
     ElevatedCard(
@@ -270,7 +263,7 @@ fun DetailScreen(viewModel: LiteratureViewModel, onBackClicked: () -> Unit) {
     }
 }
 
-// --- 页面 4: 表单添加屏幕 ---
+
 @Composable
 fun AddQuoteScreen(viewModel: LiteratureViewModel, navController: NavController) {
     var author by remember { mutableStateOf("") }
@@ -329,7 +322,7 @@ fun AddQuoteScreen(viewModel: LiteratureViewModel, navController: NavController)
     }
 }
 
-// --- 页面 5: 收藏列表屏幕 ---
+
 @Composable
 fun CollectionScreen(viewModel: LiteratureViewModel) {
     val uiState by viewModel.uiState.collectAsState()
@@ -352,12 +345,30 @@ fun CollectionScreen(viewModel: LiteratureViewModel) {
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(text = quote.content, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onTertiaryContainer)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(text = "— ${quote.author}", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(text = quote.translation, fontSize = 14.sp, color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f))
+                            // 【修改】仅仅在这里增加了 Row 和 IconButton，其他完全没变
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(text = quote.content, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(text = "— ${quote.author}", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(text = quote.translation, fontSize = 14.sp, color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f))
+                                }
+
+                                // 删除按钮
+                                IconButton(onClick = { viewModel.deleteQuote(quote) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Delete Quote",
+                                        tint = MaterialTheme.colorScheme.error // 使用主题标准的错误颜色(通常是红色)
+                                    )
+                                }
                             }
                         }
                     }
@@ -367,9 +378,7 @@ fun CollectionScreen(viewModel: LiteratureViewModel) {
     }
 }
 
-// ==========================================
-// 7. 复用 UI 组件
-// ==========================================
+
 @Composable
 fun AncientTextColumns(author: String) {
     Box(modifier = Modifier.fillMaxWidth()) {
