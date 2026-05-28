@@ -25,68 +25,134 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.room.*
+// 【新增】导入 IO 线程调度器
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 import com.example.a206805_xuyouyang_cikguizwan_lab03.ui.theme.A206805_XUYOUYANG_CikguIzwan_Lab03Theme
 
-
-data class CustomQuote(
+// 1. Room Entity
+@Entity(tableName = "quotes_table")
+data class CustomQuoteEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val author: String,
     val content: String,
     val translation: String
 )
 
-data class AppState(
-    val searchQuery: String = "",
-    val userQuotes: List<CustomQuote> = emptyList()
-)
+// 2. Room DAO
+@Dao
+interface CustomQuoteDao {
+    @Query("SELECT * FROM quotes_table")
+    fun getAllQuotes(): Flow<List<CustomQuoteEntity>>
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertQuote(quote: CustomQuoteEntity)
 
-class LiteratureViewModel : ViewModel() {
-    private val _uiState = MutableStateFlow(AppState())
-    val uiState: StateFlow<AppState> = _uiState.asStateFlow()
+    @Delete
+    fun deleteQuote(quote: CustomQuoteEntity)
+}
 
-    fun updateSearchQuery(query: String) {
-        _uiState.update { it.copy(searchQuery = query) }
+// 3. Room Database
+@Database(entities = [CustomQuoteEntity::class], version = 1, exportSchema = false)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun customQuoteDao(): CustomQuoteDao
+}
+
+// 4. Repository 【去掉 suspend】
+class QuoteRepository(private val quoteDao: CustomQuoteDao) {
+    val allQuotes: Flow<List<CustomQuoteEntity>> = quoteDao.getAllQuotes()
+
+    fun insert(quote: CustomQuoteEntity) {
+        quoteDao.insertQuote(quote)
     }
 
+    fun delete(quote: CustomQuoteEntity) {
+        quoteDao.deleteQuote(quote)
+    }
+}
+
+// UI 状态
+data class AppState(
+    val searchQuery: String = "",
+    val userQuotes: List<CustomQuoteEntity> = emptyList()
+)
+
+// ViewModel
+class LiteratureViewModel(private val repository: QuoteRepository) : ViewModel() {
+    private val _searchQuery = MutableStateFlow("")
+
+    val uiState: StateFlow<AppState> = combine(
+        _searchQuery,
+        repository.allQuotes
+    ) { query, quotes ->
+        AppState(searchQuery = query, userQuotes = quotes)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppState())
+
+    fun updateSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
+    // 【终极修复：使用 Dispatchers.IO 将操作强行放入后台线程】
     fun addQuote(author: String, content: String, translation: String) {
-        _uiState.update { currentState ->
-            val newQuote = CustomQuote(author, content, translation)
-            currentState.copy(userQuotes = currentState.userQuotes + newQuote)
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.insert(CustomQuoteEntity(author = author, content = content, translation = translation))
         }
     }
 
-    // 【新增】仅仅增加删除函数
-    fun deleteQuote(quoteToDelete: CustomQuote) {
-        _uiState.update { currentState ->
-            currentState.copy(
-                userQuotes = currentState.userQuotes.filter { it != quoteToDelete }
-            )
+    // 【终极修复：使用 Dispatchers.IO 将操作强行放入后台线程】
+    fun deleteQuote(quoteToDelete: CustomQuoteEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.delete(quoteToDelete)
         }
     }
 }
 
+// ViewModel 工厂
+class LiteratureViewModelFactory(private val repository: QuoteRepository) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(LiteratureViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return LiteratureViewModel(repository) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 初始化 Room 和 Repository
+        val database = Room.databaseBuilder(
+            applicationContext,
+            AppDatabase::class.java,
+            "literature_database"
+        ).build()
+        val repository = QuoteRepository(database.customQuoteDao())
+        val factory = LiteratureViewModelFactory(repository)
+
         enableEdgeToEdge()
         setContent {
             A206805_XUYOUYANG_CikguIzwan_Lab03Theme {
-                val viewModel: LiteratureViewModel = viewModel()
+                val viewModel: LiteratureViewModel = viewModel(factory = factory)
                 val navController = rememberNavController()
 
                 Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-
                     Image(
                         painter = painterResource(id = R.drawable.bg_classical),
                         contentDescription = "Classical Background",
@@ -98,27 +164,20 @@ class MainActivity : ComponentActivity() {
                         TopBar()
                         Box(modifier = Modifier.height(24.dp))
 
-
                         Box(modifier = Modifier.weight(1f)) {
-
                             NavHost(navController = navController, startDestination = "library_screen") {
-
                                 composable("search_screen") {
                                     SearchScreen(viewModel) { navController.navigate("library_screen") }
                                 }
-
                                 composable("library_screen") {
                                     LibraryScreen(viewModel) { navController.navigate("detail_screen") }
                                 }
-
                                 composable("detail_screen") {
                                     DetailScreen(viewModel) { navController.popBackStack() }
                                 }
-
                                 composable("add_screen") {
                                     AddQuoteScreen(viewModel, navController)
                                 }
-
                                 composable("collection_screen") {
                                     CollectionScreen(viewModel)
                                 }
@@ -133,7 +192,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
 
 @Composable
 fun TopBar() {
@@ -178,9 +236,6 @@ fun BottomNavBar(navController: NavController) {
     }
 }
 
-
-
-
 @Composable
 fun SearchScreen(viewModel: LiteratureViewModel, onSearchClicked: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
@@ -214,7 +269,6 @@ fun SearchScreen(viewModel: LiteratureViewModel, onSearchClicked: () -> Unit) {
     }
 }
 
-
 @Composable
 fun LibraryScreen(viewModel: LiteratureViewModel, onCardClicked: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
@@ -236,7 +290,6 @@ fun LibraryScreen(viewModel: LiteratureViewModel, onCardClicked: () -> Unit) {
         }
     }
 }
-
 
 @Composable
 fun DetailScreen(viewModel: LiteratureViewModel, onBackClicked: () -> Unit) {
@@ -262,7 +315,6 @@ fun DetailScreen(viewModel: LiteratureViewModel, onBackClicked: () -> Unit) {
         }
     }
 }
-
 
 @Composable
 fun AddQuoteScreen(viewModel: LiteratureViewModel, navController: NavController) {
@@ -322,7 +374,6 @@ fun AddQuoteScreen(viewModel: LiteratureViewModel, navController: NavController)
     }
 }
 
-
 @Composable
 fun CollectionScreen(viewModel: LiteratureViewModel) {
     val uiState by viewModel.uiState.collectAsState()
@@ -345,7 +396,6 @@ fun CollectionScreen(viewModel: LiteratureViewModel) {
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            // 【修改】仅仅在这里增加了 Row 和 IconButton，其他完全没变
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -361,12 +411,11 @@ fun CollectionScreen(viewModel: LiteratureViewModel) {
                                     Text(text = quote.translation, fontSize = 14.sp, color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f))
                                 }
 
-                                // 删除按钮
                                 IconButton(onClick = { viewModel.deleteQuote(quote) }) {
                                     Icon(
                                         imageVector = Icons.Default.Delete,
                                         contentDescription = "Delete Quote",
-                                        tint = MaterialTheme.colorScheme.error // 使用主题标准的错误颜色(通常是红色)
+                                        tint = MaterialTheme.colorScheme.error
                                     )
                                 }
                             }
@@ -377,7 +426,6 @@ fun CollectionScreen(viewModel: LiteratureViewModel) {
         }
     }
 }
-
 
 @Composable
 fun AncientTextColumns(author: String) {
