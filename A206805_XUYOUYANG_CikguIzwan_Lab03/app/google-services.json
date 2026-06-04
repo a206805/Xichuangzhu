@@ -1,0 +1,28 @@
+{
+  "project_info": {
+    "project_number": "1234567890",
+    "project_id": "placeholder-id",
+    "storage_bucket": "placeholder-id.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1234567890:android:73860541624c7f0b",
+        "android_client_info": {
+          "package_name": "com.example.a206805_xuyouyang_cikguizwan_lab03"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "placeholder-api-key"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
