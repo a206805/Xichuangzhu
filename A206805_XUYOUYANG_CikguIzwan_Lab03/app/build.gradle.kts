@@ -3,15 +3,13 @@ plugins {
     // 去掉了多余的 kotlin.android，因为它底层自带了！
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp) // 只保留 KSP
+    // 【新增】Google Services 插件，用于连接 Firebase
+    id("com.google.gms.google-services")
 }
 
 android {
     namespace = "com.example.a206805_xuyouyang_cikguizwan_lab03"
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 36 // 注意：为了兼容性，通常写纯数字 36 即可
 
     defaultConfig {
         applicationId = "com.example.a206805_xuyouyang_cikguizwan_lab03"
@@ -66,4 +64,16 @@ dependencies {
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
+
+    // ==========================================
+    // 【新增】Project 2 所需的 API 与 Firebase 依赖
+    // ==========================================
+
+    // 1. Retrofit (用于请求网络 API)
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+
+    // 2. Firebase (用于云端数据同步)
+    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
+    implementation("com.google.firebase:firebase-firestore-ktx")
 }
